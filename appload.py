@@ -1,20 +1,10 @@
 from requests import request
+from json import dumps
 from sys import argv, exit
 from os import mkdir
 from os.path import exists
 from lxml.html import fromstring
 
-
-if len(argv) < 2:
-    print("Playlist ID is required")
-    # exit()
-    PLID = "pl.393fca1ccb1441878aca980cc71a2d1c"
-else:
-    PLID = argv[1]
-
-APPLE_TRACKS_XPATH = ".//*[@id='tracks']/table"
-APPLE_PL_NAME_XPATH = ".//*[@id='playlistHero']/table/tr/td[2]/div[1]/a/text()"
-APPLE_LINK = "http://tools.applemusic.com/embed/v1/playlist/" + PLID
 
 HEADERS={"User-Agent": "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko)" +
         " Chrome/41.0.2228.0 Safari/537.36",
@@ -27,16 +17,32 @@ HEADERS={"User-Agent": "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, 
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         }
 
-APPLE_CONTENT = request("GET", APPLE_LINK, headers=HEADERS).content
-APPLE_TREE = fromstring(APPLE_CONTENT)
+APPLE_LINK = "http://tools.applemusic.com/embed/v1/playlist/" 
+APPLE_TRACKS_XPATH = ".//*[@id='tracks']/table"
+APPLE_PL_NAME_XPATH = ".//*[@id='playlistHero']/table/tr/td[2]/div[1]/a/text()"
+ZF_SEARCH_LINK = "https://zf.fm/mp3/search?keywords="
+ZF_RESULT_XPATH = ".//*[@id='container']/div[1]/div[2]/div/div/div[4]/div/div"
 
+
+def get_plid():
+    if len(argv) < 2:
+        print("Playlist ID is required")
+        # exit()
+        plid = "pl.393fca1ccb1441878aca980cc71a2d1c"
+    else:
+        plid = argv[1]
+    return plid
     
+
 def gen_apple_pl(plid):
     playlist = {}
     playlist['id'] = plid
-    playlist['name'] = str(APPLE_TREE.xpath(APPLE_PL_NAME_XPATH)[0].strip())
+    apple_link = APPLE_LINK + plid
+    apple_content = request("GET", apple_link, headers=HEADERS).content
+    apple_tree = fromstring(apple_content)
+    playlist['name'] = str(apple_tree.xpath(APPLE_PL_NAME_XPATH)[0].strip())
     playlist['tracks'] = []
-    tracks = APPLE_TREE.xpath(APPLE_TRACKS_XPATH)
+    tracks = apple_tree.xpath(APPLE_TRACKS_XPATH)
     for track, num in zip(tracks, range(1, len(tracks) + 1)):
         new_track = {}
         new_track['pl-num'] = str(num).rjust(len(str(len(tracks))), '0')
@@ -48,6 +54,26 @@ def gen_apple_pl(plid):
     return playlist
 
 
+def gen_zf_matchlist(artist, title):
+    search_string = artist + ' ' + title
+    link = ZF_SEARCH_LINK + search_string
+    result = []
+    zf_content = request("GET", link, headers=HEADERS).content
+    zf_tree = fromstring(zf_content)
+    tracks = zf_tree.xpath(ZF_RESULT_XPATH)
+    tracks = tracks[:5]
+    for track, num in zip(tracks, range(1, len(tracks) + 1)):
+        new_track = {}
+        new_track['match-num'] = str(num).rjust(len(str(len(tracks))), '0')
+        new_track['time'] = track.xpath("div/div/div[1]/span/text()")[0].strip()
+        new_track['zf-id'] = track.xpath("div/div/span")[0].get('data-sid')
+        new_track['title'] = track.xpath("div/div/div[2]/div[2]/a/span/text()")[0].strip()
+        new_track['artist'] = track.xpath("div/div/div[2]/div[1]/a/span/text()")[0].strip()
+        new_track['url'] = track.xpath("div/div/span")[0].get('data-url')
+        result.append(new_track)
+    return result
+
+
 def download_track(link, number, artist, title, dir_name):
     if not exists(dir_name):
         mkdir(dir_name)
@@ -57,18 +83,23 @@ def download_track(link, number, artist, title, dir_name):
         if symbol in file_name:
             file_name = file_name.replace(s, "_")
     full_path = dir_name + "/" + file_name
-    with open(full_path, 'wb') as f:                                                                               
+    with open(full_path, 'wb') as f:
         f.write(request("GET", link, headers=HEADERS).content)
     return True
 
 
 def main():
     """docstring for main"""
-    playlist = gen_apple_pl(PLID)
-    for track in playlist['tracks']:
-        download_track(track['audio-url'], track['pl-num'], track['artist'], track['title'],
-                playlist['name'])
-        print('Track "' + track['title'] + '" is downloaded')
+    plid = get_plid()
+    apple_pl = gen_apple_pl(plid)
+    tracks = apple_pl['tracks'][:5]  # limit
+    for track in tracks:
+        # download_track(track['audio-url'], track['pl-num'], track['artist'], track['title'],
+        #         playlist['name'])
+        matchlist = gen_zf_matchlist(track['artist'], track['title'])
+        pretty_pl = dumps(matchlist, indent=4, ensure_ascii=False)
+        print(pretty_pl)
+        # print('Track "' + track['title'] + '" is downloaded')
     
 
 if __name__ == '__main__':
