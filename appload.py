@@ -1,5 +1,4 @@
 from requests import request
-from json import dumps
 from sys import argv, exit
 from os import mkdir
 from os.path import exists
@@ -20,10 +19,11 @@ HEADERS={"User-Agent": "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, 
 APPLE_LINK = "http://tools.applemusic.com/embed/v1/playlist/" 
 APPLE_TRACKS_XPATH = ".//*[@id='tracks']/table"
 APPLE_PL_NAME_XPATH = ".//*[@id='playlistHero']/table/tr/td[2]/div[1]/a/text()"
+LIMIT_APPLE_TRACKS = 1000
 ZF_SITE = "https://zf.fm"
 ZF_SEARCH_LINK = "https://zf.fm/mp3/search?keywords="
 ZF_RESULT_XPATH = ".//*[@id='container']/div[1]/div[2]/div/div/div[4]/div/div"
-
+LIMIT_MATCH_TRACKS = 20
 
 def get_plid():
     if len(argv) < 2:
@@ -61,7 +61,7 @@ def gen_zf_matchlist(artist, title):
     zf_content = request("GET", link, headers=HEADERS).content
     zf_tree = fromstring(zf_content)
     tracks = zf_tree.xpath(ZF_RESULT_XPATH)
-    tracks = tracks[:5]
+    tracks = tracks[:LIMIT_MATCH_TRACKS]
     for track, num in zip(tracks, range(1, len(tracks) + 1)):
         new_track = {}
         new_track['match-num'] = str(num).rjust(len(str(len(tracks))), '0')
@@ -105,7 +105,7 @@ def download_track(link, number, artist, title, dir_name):
 def main():
     plid = get_plid()
     apple_pl = gen_apple_pl(plid)
-    tracks = apple_pl['tracks'][:2]  # limit
+    tracks = apple_pl['tracks'][:LIMIT_APPLE_TRACKS]
     for track in tracks:
         matchlist = gen_zf_matchlist(track['artist'], track['title'])
         matchtrack = choose_from(matchlist)
