@@ -1,6 +1,6 @@
 # appload
 
-Parser for Apple Music
+#### Parser for Apple Music.
 Allows you to download music from the Apple Music playlist by id
 
 ## Example
