@@ -20,6 +20,7 @@ HEADERS={"User-Agent": "Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, 
 APPLE_LINK = "http://tools.applemusic.com/embed/v1/playlist/" 
 APPLE_TRACKS_XPATH = ".//*[@id='tracks']/table"
 APPLE_PL_NAME_XPATH = ".//*[@id='playlistHero']/table/tr/td[2]/div[1]/a/text()"
+ZF_SITE = "https://zf.fm"
 ZF_SEARCH_LINK = "https://zf.fm/mp3/search?keywords="
 ZF_RESULT_XPATH = ".//*[@id='container']/div[1]/div[2]/div/div/div[4]/div/div"
 
@@ -27,8 +28,7 @@ ZF_RESULT_XPATH = ".//*[@id='container']/div[1]/div[2]/div/div/div[4]/div/div"
 def get_plid():
     if len(argv) < 2:
         print("Playlist ID is required")
-        # exit()
-        plid = "pl.393fca1ccb1441878aca980cc71a2d1c"
+        exit()
     else:
         plid = argv[1]
     return plid
@@ -74,6 +74,17 @@ def gen_zf_matchlist(artist, title):
     return result
 
 
+def choose_from(matchlist):
+    for track in matchlist:
+        infostring = '{}. {} - "{}" ({})'.format(track['match-num'], track['artist'],
+                track['title'], track['time'])
+        print(infostring)
+    choise = input("Choose track for downloading:\n")
+    if not choise:
+        choise = 1
+    choise = int(choise)
+    return matchlist[choise - 1]
+    
 def download_track(link, number, artist, title, dir_name):
     if not exists(dir_name):
         mkdir(dir_name)
@@ -83,23 +94,23 @@ def download_track(link, number, artist, title, dir_name):
         if symbol in file_name:
             file_name = file_name.replace(s, "_")
     full_path = dir_name + "/" + file_name
+    if link.startswith("/"):
+        link = ZF_SITE + link
     with open(full_path, 'wb') as f:
         f.write(request("GET", link, headers=HEADERS).content)
+    print('Track "' + artist + ' - ' + title + '" is downloaded')
     return True
 
 
 def main():
-    """docstring for main"""
     plid = get_plid()
     apple_pl = gen_apple_pl(plid)
-    tracks = apple_pl['tracks'][:5]  # limit
+    tracks = apple_pl['tracks'][:2]  # limit
     for track in tracks:
-        # download_track(track['audio-url'], track['pl-num'], track['artist'], track['title'],
-        #         playlist['name'])
         matchlist = gen_zf_matchlist(track['artist'], track['title'])
-        pretty_pl = dumps(matchlist, indent=4, ensure_ascii=False)
-        print(pretty_pl)
-        # print('Track "' + track['title'] + '" is downloaded')
+        matchtrack = choose_from(matchlist)
+        download_track(matchtrack['url'], track['pl-num'], track['artist'], track['title'],
+                apple_pl['name'])
     
 
 if __name__ == '__main__':
